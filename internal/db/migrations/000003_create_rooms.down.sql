@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS rooms;
+DROP TYPE IF EXISTS room_status;
+DROP TYPE IF EXISTS room_type;
