@@ -1,0 +1,23 @@
+# env file
+.env
+
+# binary
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+bin/
+build/
+
+# Go test cache
+*.test
+*.out
+
+# Vendor
+vendor/
+
+# OS files
+.DS_Store
+Thumbs.db
