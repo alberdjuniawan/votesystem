@@ -24,6 +24,19 @@ SET status = $2, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
+-- name: UpdateRoom :one
+UPDATE rooms
+SET
+    title = $2,
+    description = $3,
+    show_realtime = $4,
+    max_votes = $5,
+    starts_at = $6,
+    ends_at = $7,
+    updated_at = NOW()
+WHERE id = $1 AND owner_id = $3
+RETURNING *;
+
 -- name: DeleteRoom :exec
 DELETE FROM rooms
 WHERE id = $1 AND owner_id = $2;
