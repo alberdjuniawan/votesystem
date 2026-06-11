@@ -97,33 +97,48 @@ func (s *Service) UpdateOption(ctx context.Context, optionID, userID string, req
 		return nil, err
 	}
 
-	optUID, _ := utils.StrToPgUUID(optionID)
-	params := dbsqlc.UpdateOptionParams{
-		ID:          optUID,
-		Label:       req.Label,
-		Description: utils.StrPtrToPgText(strPtr(req.Description)),
-		OrderNum:    int32(req.OrderNum),
+	label := opt.Label
+	if req.Label != nil {
+		label = *req.Label
 	}
 
+	description := opt.Description
+	if req.Description != nil {
+		description = utils.StrPtrToPgText(req.Description)
+	}
+
+	metadata := opt.Metadata
 	if req.Metadata != nil {
-		params.Metadata = req.Metadata
+		metadata = req.Metadata
 	}
 
+	mediaID := opt.MediaID
 	if req.MediaID != nil {
 		if *req.MediaID == "" {
-			params.MediaID = pgtype.UUID{Valid: false}
+			mediaID = pgtype.UUID{Valid: false}
 		} else {
-			mediaUID, err := utils.StrToPgUUID(*req.MediaID)
+			uid, err := utils.StrToPgUUID(*req.MediaID)
 			if err != nil {
 				return nil, ErrInternal
 			}
-			params.MediaID = mediaUID
+			mediaID = uid
 		}
-	} else {
-		params.MediaID = opt.MediaID
 	}
 
-	updated, err := s.repo.UpdateOption(ctx, params)
+	orderNum := opt.OrderNum
+	if req.OrderNum != nil {
+		orderNum = int32(*req.OrderNum)
+	}
+
+	optUID, _ := utils.StrToPgUUID(optionID)
+	updated, err := s.repo.UpdateOption(ctx, dbsqlc.UpdateOptionParams{
+		ID:          optUID,
+		Label:       label,
+		Description: description,
+		Metadata:    metadata,
+		MediaID:     mediaID,
+		OrderNum:    orderNum,
+	})
 	if err != nil {
 		logger.Error(ctx, "Failed to update option", "option_id", optionID, "error", err)
 		return nil, ErrInternal
