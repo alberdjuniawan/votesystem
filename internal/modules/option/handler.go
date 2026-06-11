@@ -19,7 +19,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) CreateOption(c *gin.Context) {
-	roomID := c.Param("roomId")
+	roomID := c.Param("id")
 
 	var req CreateOptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -56,7 +56,7 @@ func (h *Handler) CreateOption(c *gin.Context) {
 }
 
 func (h *Handler) ListOptions(c *gin.Context) {
-	roomID := c.Param("roomId")
+	roomID := c.Param("id")
 	ctx := c.Request.Context()
 
 	result, err := h.service.ListOptions(ctx, roomID)
