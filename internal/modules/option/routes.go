@@ -1,0 +1,19 @@
+package option
+
+import "github.com/gin-gonic/gin"
+
+func RegisterRoutes(rg *gin.RouterGroup, service *Service, authMw gin.HandlerFunc) {
+	h := NewHandler(service)
+
+	public := rg.Group("/rooms/:roomId/options")
+	{
+		public.GET("", h.ListOptions)
+	}
+
+	protected := rg.Group("/rooms/:roomId/options", authMw)
+	{
+		protected.POST("", h.CreateOption)
+		protected.PUT("/:optionId", h.UpdateOption)
+		protected.DELETE("/:optionId", h.DeleteOption)
+	}
+}
