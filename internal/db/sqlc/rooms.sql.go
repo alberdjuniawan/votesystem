@@ -169,6 +169,59 @@ func (q *Queries) ListRoomsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]
 	return items, nil
 }
 
+const updateRoom = `-- name: UpdateRoom :one
+UPDATE rooms
+SET
+    title = $2,
+    description = $3,
+    show_realtime = $4,
+    max_votes = $5,
+    starts_at = $6,
+    ends_at = $7,
+    updated_at = NOW()
+WHERE id = $1 AND owner_id = $3
+RETURNING id, owner_id, title, description, type, status, show_realtime, max_votes, starts_at, ends_at, share_code, created_at, updated_at
+`
+
+type UpdateRoomParams struct {
+	ID           pgtype.UUID        `json:"id"`
+	Title        string             `json:"title"`
+	Description  pgtype.Text        `json:"description"`
+	ShowRealtime bool               `json:"show_realtime"`
+	MaxVotes     int32              `json:"max_votes"`
+	StartsAt     pgtype.Timestamptz `json:"starts_at"`
+	EndsAt       pgtype.Timestamptz `json:"ends_at"`
+}
+
+func (q *Queries) UpdateRoom(ctx context.Context, arg UpdateRoomParams) (Room, error) {
+	row := q.db.QueryRow(ctx, updateRoom,
+		arg.ID,
+		arg.Title,
+		arg.Description,
+		arg.ShowRealtime,
+		arg.MaxVotes,
+		arg.StartsAt,
+		arg.EndsAt,
+	)
+	var i Room
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Title,
+		&i.Description,
+		&i.Type,
+		&i.Status,
+		&i.ShowRealtime,
+		&i.MaxVotes,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.ShareCode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateRoomStatus = `-- name: UpdateRoomStatus :one
 UPDATE rooms
 SET status = $2, updated_at = NOW()

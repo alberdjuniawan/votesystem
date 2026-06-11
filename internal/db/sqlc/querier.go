@@ -21,6 +21,7 @@ type Querier interface {
 	DeleteRoom(ctx context.Context, arg DeleteRoomParams) error
 	GetMediaByID(ctx context.Context, id pgtype.UUID) (Medium, error)
 	GetOptionByID(ctx context.Context, id pgtype.UUID) (Option, error)
+	GetOptionsCountByRoom(ctx context.Context, roomID pgtype.UUID) (int64, error)
 	GetRoomByID(ctx context.Context, id pgtype.UUID) (Room, error)
 	GetRoomByShareCode(ctx context.Context, shareCode string) (Room, error)
 	GetTotalVotesByRoom(ctx context.Context, roomID pgtype.UUID) (int64, error)
@@ -30,6 +31,8 @@ type Querier interface {
 	GetVoteCountsByRoom(ctx context.Context, roomID pgtype.UUID) ([]GetVoteCountsByRoomRow, error)
 	ListOptionsByRoom(ctx context.Context, roomID pgtype.UUID) ([]Option, error)
 	ListRoomsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]Room, error)
+	UpdateOption(ctx context.Context, arg UpdateOptionParams) (Option, error)
+	UpdateRoom(ctx context.Context, arg UpdateRoomParams) (Room, error)
 	UpdateRoomStatus(ctx context.Context, arg UpdateRoomStatusParams) (Room, error)
 }
 

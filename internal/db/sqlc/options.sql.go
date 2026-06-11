@@ -81,6 +81,18 @@ func (q *Queries) GetOptionByID(ctx context.Context, id pgtype.UUID) (Option, er
 	return i, err
 }
 
+const getOptionsCountByRoom = `-- name: GetOptionsCountByRoom :one
+SELECT COUNT(*) FROM options
+WHERE room_id = $1
+`
+
+func (q *Queries) GetOptionsCountByRoom(ctx context.Context, roomID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getOptionsCountByRoom, roomID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const listOptionsByRoom = `-- name: ListOptionsByRoom :many
 SELECT id, room_id, label, description, metadata, media_id, order_num, created_at FROM options
 WHERE room_id = $1
@@ -114,4 +126,48 @@ func (q *Queries) ListOptionsByRoom(ctx context.Context, roomID pgtype.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateOption = `-- name: UpdateOption :one
+UPDATE options
+SET
+    label = $2,
+    description = $3,
+    metadata = $4,
+    media_id = $5,
+    order_num = $6
+WHERE id = $1
+RETURNING id, room_id, label, description, metadata, media_id, order_num, created_at
+`
+
+type UpdateOptionParams struct {
+	ID          pgtype.UUID `json:"id"`
+	Label       string      `json:"label"`
+	Description pgtype.Text `json:"description"`
+	Metadata    []byte      `json:"metadata"`
+	MediaID     pgtype.UUID `json:"media_id"`
+	OrderNum    int32       `json:"order_num"`
+}
+
+func (q *Queries) UpdateOption(ctx context.Context, arg UpdateOptionParams) (Option, error) {
+	row := q.db.QueryRow(ctx, updateOption,
+		arg.ID,
+		arg.Label,
+		arg.Description,
+		arg.Metadata,
+		arg.MediaID,
+		arg.OrderNum,
+	)
+	var i Option
+	err := row.Scan(
+		&i.ID,
+		&i.RoomID,
+		&i.Label,
+		&i.Description,
+		&i.Metadata,
+		&i.MediaID,
+		&i.OrderNum,
+		&i.CreatedAt,
+	)
+	return i, err
 }
