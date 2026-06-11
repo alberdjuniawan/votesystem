@@ -13,7 +13,7 @@ func RegisterRoutes(rg *gin.RouterGroup, service *Service, authMw gin.HandlerFun
 	protected := rg.Group("/rooms/:id/options", authMw)
 	{
 		protected.POST("", h.CreateOption)
-		protected.PUT("/:optionId", h.UpdateOption)
+		protected.PATCH("/:optionId", h.UpdateOption)
 		protected.DELETE("/:optionId", h.DeleteOption)
 	}
 }
