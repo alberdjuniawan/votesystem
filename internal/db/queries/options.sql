@@ -13,6 +13,21 @@ SELECT * FROM options
 WHERE id = $1
 LIMIT 1;
 
+-- name: UpdateOption :one
+UPDATE options
+SET
+    label = $2,
+    description = $3,
+    metadata = $4,
+    media_id = $5,
+    order_num = $6
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteOption :exec
 DELETE FROM options
 WHERE id = $1;
+
+-- name: GetOptionsCountByRoom :one
+SELECT COUNT(*) FROM options
+WHERE room_id = $1;
