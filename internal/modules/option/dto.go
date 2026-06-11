@@ -14,11 +14,11 @@ type CreateOptionRequest struct {
 }
 
 type UpdateOptionRequest struct {
-	Label       string          `json:"label" validate:"required,min=1,max=255"`
-	Description string          `json:"description"`
+	Label       *string         `json:"label" validate:"omitempty,min=1,max=255"`
+	Description *string         `json:"description"`
 	Metadata    json.RawMessage `json:"metadata"`
 	MediaID     *string         `json:"media_id"`
-	OrderNum    int             `json:"order_num"`
+	OrderNum    *int            `json:"order_num"`
 }
 
 type OptionResponse struct {
