@@ -73,30 +73,75 @@ func (q *Queries) GetVoteByRoomAndUser(ctx context.Context, arg GetVoteByRoomAnd
 	return i, err
 }
 
-const getVoteCountsByRoom = `-- name: GetVoteCountsByRoom :many
-SELECT
-    option_id,
-    COUNT(*) AS vote_count
-FROM votes
-WHERE room_id = $1
-GROUP BY option_id
+const getVoteByRoomUserOption = `-- name: GetVoteByRoomUserOption :one
+SELECT id, room_id, user_id, option_id, created_at FROM votes
+WHERE room_id = $1 AND user_id = $2 AND option_id = $3
+LIMIT 1
 `
 
-type GetVoteCountsByRoomRow struct {
-	OptionID  pgtype.UUID `json:"option_id"`
-	VoteCount int64       `json:"vote_count"`
+type GetVoteByRoomUserOptionParams struct {
+	RoomID   pgtype.UUID `json:"room_id"`
+	UserID   pgtype.UUID `json:"user_id"`
+	OptionID pgtype.UUID `json:"option_id"`
 }
 
-func (q *Queries) GetVoteCountsByRoom(ctx context.Context, roomID pgtype.UUID) ([]GetVoteCountsByRoomRow, error) {
-	rows, err := q.db.Query(ctx, getVoteCountsByRoom, roomID)
+func (q *Queries) GetVoteByRoomUserOption(ctx context.Context, arg GetVoteByRoomUserOptionParams) (Vote, error) {
+	row := q.db.QueryRow(ctx, getVoteByRoomUserOption, arg.RoomID, arg.UserID, arg.OptionID)
+	var i Vote
+	err := row.Scan(
+		&i.ID,
+		&i.RoomID,
+		&i.UserID,
+		&i.OptionID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getVoteCountByRoomAndUser = `-- name: GetVoteCountByRoomAndUser :one
+SELECT COUNT(*) AS total
+FROM votes
+WHERE room_id = $1 AND user_id = $2
+`
+
+type GetVoteCountByRoomAndUserParams struct {
+	RoomID pgtype.UUID `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetVoteCountByRoomAndUser(ctx context.Context, arg GetVoteCountByRoomAndUserParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getVoteCountByRoomAndUser, arg.RoomID, arg.UserID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const getVotesByRoomAndUser = `-- name: GetVotesByRoomAndUser :many
+SELECT id, room_id, user_id, option_id, created_at FROM votes
+WHERE room_id = $1 AND user_id = $2
+`
+
+type GetVotesByRoomAndUserParams struct {
+	RoomID pgtype.UUID `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetVotesByRoomAndUser(ctx context.Context, arg GetVotesByRoomAndUserParams) ([]Vote, error) {
+	rows, err := q.db.Query(ctx, getVotesByRoomAndUser, arg.RoomID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetVoteCountsByRoomRow{}
+	items := []Vote{}
 	for rows.Next() {
-		var i GetVoteCountsByRoomRow
-		if err := rows.Scan(&i.OptionID, &i.VoteCount); err != nil {
+		var i Vote
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomID,
+			&i.UserID,
+			&i.OptionID,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
