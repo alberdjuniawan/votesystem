@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alberdjuniawan/votesystem/internal/config"
+	"github.com/alberdjuniawan/votesystem/internal/modules/realtime"
 	"github.com/alberdjuniawan/votesystem/internal/shared/db"
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
 	miniopkg "github.com/alberdjuniawan/votesystem/internal/shared/minio"
@@ -48,7 +49,12 @@ func main() {
 	}
 	logger.Info(ctx, "MinIO connected")
 
-	srv := NewServer(cfg, dbPool, redisClient, minioClient)
+	hub := realtime.NewHub()
+	hubCtx, hubCancel := context.WithCancel(ctx)
+	defer hubCancel()
+	go hub.Run(hubCtx)
+
+	srv := NewServer(cfg, dbPool, redisClient, minioClient, hub)
 
 	go func() {
 		logger.Info(ctx, "Server started", "port", cfg.App.Port)
