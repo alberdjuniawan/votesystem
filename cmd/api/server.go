@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
+	miniopkg "github.com/alberdjuniawan/votesystem/internal/shared/minio"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/minio/minio-go/v7"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
@@ -14,8 +14,12 @@ import (
 	dbsqlc "github.com/alberdjuniawan/votesystem/internal/db/sqlc"
 	"github.com/alberdjuniawan/votesystem/internal/middleware"
 	"github.com/alberdjuniawan/votesystem/internal/modules/auth"
+	"github.com/alberdjuniawan/votesystem/internal/modules/leaderboard"
+	"github.com/alberdjuniawan/votesystem/internal/modules/media"
 	"github.com/alberdjuniawan/votesystem/internal/modules/option"
+	"github.com/alberdjuniawan/votesystem/internal/modules/realtime"
 	"github.com/alberdjuniawan/votesystem/internal/modules/room"
+	"github.com/alberdjuniawan/votesystem/internal/modules/vote"
 )
 
 type Server struct {
@@ -26,7 +30,8 @@ func NewServer(
 	cfg *config.Config,
 	dbPool *pgxpool.Pool,
 	redisClient *redis.Client,
-	minioClient *minio.Client,
+	minioClient *miniopkg.Client,
+	hub *realtime.Hub,
 ) *Server {
 	if cfg.App.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -61,6 +66,19 @@ func NewServer(
 	optionRepo := option.NewRepository(queries, dbPool)
 	optionService := option.NewService(optionRepo, cfg.App.BaseURL)
 	option.RegisterRoutes(api, optionService, authMw)
+
+	mediaRepo := media.NewRepository(queries, dbPool)
+	mediaService := media.NewService(mediaRepo, minioClient)
+	media.RegisterRoutes(api, mediaService, authMw)
+
+	leaderboardService := leaderboard.NewService(redisClient)
+	leaderboard.RegisterRoutes(api, leaderboardService)
+
+	realtime.RegisterRoutes(api, hub)
+
+	voteRepo := vote.NewRepository(queries, dbPool)
+	voteService := vote.NewService(voteRepo, dbPool, leaderboardService, hub)
+	vote.RegisterRoutes(api, voteService, authMw)
 
 	_ = redisClient
 	_ = minioClient
