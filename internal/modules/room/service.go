@@ -39,6 +39,12 @@ func (s *Service) CreateRoom(ctx context.Context, ownerID string, req CreateRoom
 		return nil, ErrShareCodeCollision
 	}
 
+	if req.Type == "single_choice" {
+		req.MaxVotes = 1
+	} else if req.Type == "multiple_choice" && req.MaxVotes < 2 {
+		return nil, ErrInvalidMaxVotes
+	}
+
 	params := dbsqlc.CreateRoomParams{
 		OwnerID:      ownerUID,
 		Title:        req.Title,
