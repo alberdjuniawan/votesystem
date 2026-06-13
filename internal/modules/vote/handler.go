@@ -49,6 +49,11 @@ func (h *Handler) CastVote(c *gin.Context) {
 			response.NewError(c, response.ErrNotFound, err.Error())
 		case errors.Is(err, ErrOptionNotInRoom):
 			response.NewError(c, response.ErrBadRequest, err.Error())
+		case errors.Is(err, ErrAlreadyVotedOption):
+			logger.Info(ctx, "Duplicate option vote attempt", "room_id", roomID, "user_id", userID)
+			response.NewError(c, response.ErrConflict, err.Error())
+		case errors.Is(err, ErrMaxVotesReached):
+			response.NewError(c, response.ErrForbidden, err.Error())
 		default:
 			logger.Error(ctx, "CastVote failed", "room_id", roomID, "user_id", userID)
 			response.NewError(c, response.ErrInternal, nil)
