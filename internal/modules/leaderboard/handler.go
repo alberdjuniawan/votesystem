@@ -18,18 +18,12 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 	roomID := c.Param("id")
 	ctx := c.Request.Context()
 
-	scores, err := h.service.GetLeaderboard(ctx, roomID)
+	result, err := h.service.GetLeaderboard(ctx, roomID)
 	if err != nil {
 		logger.Error(ctx, "GetLeaderboard failed", "room_id", roomID, "error", err)
 		response.NewError(c, response.ErrInternal, nil)
 		return
 	}
 
-	total, _ := h.service.TotalVotes(ctx, roomID)
-
-	response.OK(c, gin.H{
-		"room_id": roomID,
-		"scores":  scores,
-		"total":   total,
-	})
+	response.OK(c, result)
 }
