@@ -30,17 +30,21 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	if req.MaxVotes == 0 {
-		req.MaxVotes = 1
-	}
-
 	ctx := c.Request.Context()
 	ownerID := middleware.GetUserID(c)
 
 	result, err := h.service.CreateRoom(ctx, ownerID, req)
 	if err != nil {
-		logger.Error(ctx, "CreateRoom failed", "owner_id", ownerID)
-		response.NewError(c, response.ErrInternal, nil)
+		switch {
+		case errors.Is(err, ErrInvalidMaxVotes):
+			response.NewError(c, response.ErrBadRequest, err.Error())
+		case errors.Is(err, ErrShareCodeCollision):
+			logger.Error(ctx, "CreateRoom failed. Share code collision", "owner_id", ownerID)
+			response.NewError(c, response.ErrInternal, nil)
+		default:
+			logger.Error(ctx, "CreateRoom failed", "owner_id", ownerID)
+			response.NewError(c, response.ErrInternal, nil)
+		}
 		return
 	}
 
@@ -125,7 +129,7 @@ func (h *Handler) UpdateRoomStatus(c *gin.Context) {
 		case errors.Is(err, ErrNotOwner):
 			response.NewError(c, response.ErrForbidden, err.Error())
 		case errors.Is(err, ErrInvalidStatus):
-			response.NewError(c, response.ErrBadRequest, "invalid status transition. draft→active→closed only")
+			response.NewError(c, response.ErrBadRequest, err.Error())
 		default:
 			logger.Error(ctx, "UpdateRoomStatus failed", "room_id", id, "owner_id", ownerID)
 			response.NewError(c, response.ErrInternal, nil)
