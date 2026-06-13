@@ -33,21 +33,6 @@ func (r *Repository) GetOptionByID(ctx context.Context, id string) (dbsqlc.Optio
 	return r.queries.GetOptionByID(ctx, uid)
 }
 
-func (r *Repository) GetVoteByRoomAndUser(ctx context.Context, roomID, userID string) (dbsqlc.Vote, error) {
-	roomUID, err := utils.StrToPgUUID(roomID)
-	if err != nil {
-		return dbsqlc.Vote{}, err
-	}
-	userUID, err := utils.StrToPgUUID(userID)
-	if err != nil {
-		return dbsqlc.Vote{}, err
-	}
-	return r.queries.GetVoteByRoomAndUser(ctx, dbsqlc.GetVoteByRoomAndUserParams{
-		RoomID: roomUID,
-		UserID: userUID,
-	})
-}
-
 func (r *Repository) CreateVote(ctx context.Context, roomID, userID, optionID string) (dbsqlc.Vote, error) {
 	roomUID, err := utils.StrToPgUUID(roomID)
 	if err != nil {
