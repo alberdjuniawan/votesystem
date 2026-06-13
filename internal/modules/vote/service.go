@@ -11,25 +11,22 @@ import (
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
 	"github.com/alberdjuniawan/votesystem/internal/shared/utils"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Service struct {
 	repo        *Repository
-	db          *pgxpool.Pool
 	leaderboard *leaderboard.Service
 	hub         *realtime.Hub
 }
 
 func NewService(
 	repo *Repository,
-	db *pgxpool.Pool,
 	leaderboard *leaderboard.Service,
 	hub *realtime.Hub,
 ) *Service {
 	return &Service{
 		repo:        repo,
-		db:          db,
 		leaderboard: leaderboard,
 		hub:         hub,
 	}
@@ -69,32 +66,55 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 		return nil, ErrOptionNotInRoom
 	}
 
-	_, err = s.repo.GetVoteByRoomAndUser(ctx, roomID, userID)
-	if err == nil {
-		return nil, ErrAlreadyVoted
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		logger.Error(ctx, "Unexpected DB error checking existing vote", "error", err)
-		return nil, ErrInternal
+	if room.Type == dbsqlc.RoomTypeSingleChoice {
+		votes, err := s.repo.GetVotesByRoomAndUser(ctx, roomID, userID)
+		if err != nil {
+			logger.Error(ctx, "Unexpected DB error checking vote", "error", err)
+			return nil, ErrInternal
+		}
+		if len(votes) > 0 {
+			return nil, ErrAlreadyVoted
+		}
+	} else {
+		_, err = s.repo.GetVoteByRoomUserOption(ctx, roomID, userID, req.OptionID)
+		if err == nil {
+			return nil, ErrAlreadyVotedOption
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			logger.Error(ctx, "Unexpected DB error checking vote", "error", err)
+			return nil, ErrInternal
+		}
+
+		voteCount, err := s.repo.GetVoteCountByRoomAndUser(ctx, roomID, userID)
+		if err != nil {
+			logger.Error(ctx, "Unexpected DB error counting votes", "error", err)
+			return nil, ErrInternal
+		}
+		if voteCount >= int64(room.MaxVotes) {
+			return nil, ErrMaxVotesReached
+		}
 	}
 
 	vote, err := s.repo.CreateVote(ctx, roomID, userID, req.OptionID)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, ErrAlreadyVoted
+			if room.Type == dbsqlc.RoomTypeSingleChoice {
+				return nil, ErrAlreadyVoted
+			}
+			return nil, ErrAlreadyVotedOption
 		}
-		logger.Error(ctx, "Failed to insert vote", "room_id", roomID, "user_id", userID, "error", err)
+		logger.Error(ctx, "Failed to insert vote", "error", err)
 		return nil, ErrInternal
 	}
 
 	if err := s.leaderboard.IncrementVote(ctx, roomID, req.OptionID); err != nil {
-		logger.Error(ctx, "Failed to update leaderboard in Redis", "room_id", roomID, "option_id", req.OptionID, "error", err)
+		logger.Error(ctx, "Failed to update leaderboard", "error", err)
 	}
 
 	voteCount, _ := s.leaderboard.GetVoteCount(ctx, roomID, req.OptionID)
 	totalVotes, _ := s.leaderboard.TotalVotes(ctx, roomID)
 
-	if err := s.hub.Broadcast(roomID, realtime.BroadcastMessage{
+	s.hub.Broadcast(roomID, realtime.BroadcastMessage{
 		Type:   "vote_update",
 		RoomID: roomID,
 		Payload: realtime.VoteUpdatePayload{
@@ -102,23 +122,38 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 			VoteCount: voteCount,
 			Total:     totalVotes,
 		},
-	}); err != nil {
-		logger.Error(ctx, "Failed to broadcast vote update", "room_id", roomID, "error", err)
-	}
+	})
 
 	return toVoteResponse(vote), nil
 }
 
-func (s *Service) GetMyVote(ctx context.Context, roomID, userID string) (*VoteResponse, error) {
-	vote, err := s.repo.GetVoteByRoomAndUser(ctx, roomID, userID)
+func (s *Service) GetMyVote(ctx context.Context, roomID, userID string) (*MyVoteResponse, error) {
+	room, err := s.repo.GetRoomByID(ctx, roomID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, ErrRoomNotFound
 		}
-		logger.Error(ctx, "Unexpected DB error getting vote", "error", err)
+		logger.Error(ctx, "Unexpected DB error getting room", "error", err)
 		return nil, ErrInternal
 	}
-	return toVoteResponse(vote), nil
+
+	votes, err := s.repo.GetVotesByRoomAndUser(ctx, roomID, userID)
+	if err != nil {
+		logger.Error(ctx, "Unexpected DB error getting votes", "error", err)
+		return nil, ErrInternal
+	}
+
+	voteResponses := make([]VoteResponse, len(votes))
+	for i, v := range votes {
+		voteResponses[i] = *toVoteResponse(v)
+	}
+
+	return &MyVoteResponse{
+		RoomID:   roomID,
+		RoomType: string(room.Type),
+		Votes:    voteResponses,
+		HasVoted: len(votes) > 0,
+	}, nil
 }
 
 func toVoteResponse(v dbsqlc.Vote) *VoteResponse {
@@ -132,20 +167,6 @@ func toVoteResponse(v dbsqlc.Vote) *VoteResponse {
 }
 
 func isUniqueViolation(err error) bool {
-	return err != nil && len(err.Error()) > 0 &&
-		contains(err.Error(), "23505")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr || len(s) > 0 && containsStr(s, substr))
-}
-
-func containsStr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
