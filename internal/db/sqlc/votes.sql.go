@@ -49,30 +49,6 @@ func (q *Queries) GetTotalVotesByRoom(ctx context.Context, roomID pgtype.UUID) (
 	return total, err
 }
 
-const getVoteByRoomAndUser = `-- name: GetVoteByRoomAndUser :one
-SELECT id, room_id, user_id, option_id, created_at FROM votes
-WHERE room_id = $1 AND user_id = $2
-LIMIT 1
-`
-
-type GetVoteByRoomAndUserParams struct {
-	RoomID pgtype.UUID `json:"room_id"`
-	UserID pgtype.UUID `json:"user_id"`
-}
-
-func (q *Queries) GetVoteByRoomAndUser(ctx context.Context, arg GetVoteByRoomAndUserParams) (Vote, error) {
-	row := q.db.QueryRow(ctx, getVoteByRoomAndUser, arg.RoomID, arg.UserID)
-	var i Vote
-	err := row.Scan(
-		&i.ID,
-		&i.RoomID,
-		&i.UserID,
-		&i.OptionID,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getVoteByRoomUserOption = `-- name: GetVoteByRoomUserOption :one
 SELECT id, room_id, user_id, option_id, created_at FROM votes
 WHERE room_id = $1 AND user_id = $2 AND option_id = $3

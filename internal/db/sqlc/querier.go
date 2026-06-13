@@ -27,7 +27,6 @@ type Querier interface {
 	GetTotalVotesByRoom(ctx context.Context, roomID pgtype.UUID) (int64, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
-	GetVoteByRoomAndUser(ctx context.Context, arg GetVoteByRoomAndUserParams) (Vote, error)
 	GetVoteByRoomUserOption(ctx context.Context, arg GetVoteByRoomUserOptionParams) (Vote, error)
 	GetVoteCountByRoomAndUser(ctx context.Context, arg GetVoteCountByRoomAndUserParams) (int64, error)
 	GetVotesByRoomAndUser(ctx context.Context, arg GetVotesByRoomAndUserParams) ([]Vote, error)
