@@ -71,13 +71,14 @@ func NewServer(
 	mediaService := media.NewService(mediaRepo, minioClient)
 	media.RegisterRoutes(api, mediaService, authMw)
 
-	leaderboardService := leaderboard.NewService(redisClient)
+	leaderboardRepo := leaderboard.NewRepository(queries, dbPool)
+	leaderboardService := leaderboard.NewService(redisClient, leaderboardRepo)
 	leaderboard.RegisterRoutes(api, leaderboardService)
 
 	realtime.RegisterRoutes(api, hub)
 
 	voteRepo := vote.NewRepository(queries, dbPool)
-	voteService := vote.NewService(voteRepo, dbPool, leaderboardService, hub)
+	voteService := vote.NewService(voteRepo, leaderboardService, hub)
 	vote.RegisterRoutes(api, voteService, authMw)
 
 	_ = redisClient
