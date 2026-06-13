@@ -68,10 +68,52 @@ func (r *Repository) CreateVote(ctx context.Context, roomID, userID, optionID st
 	})
 }
 
-func (r *Repository) GetVoteCountsByRoom(ctx context.Context, roomID string) ([]dbsqlc.GetVoteCountsByRoomRow, error) {
-	uid, err := utils.StrToPgUUID(roomID)
+func (r *Repository) GetVoteByRoomUserOption(ctx context.Context, roomID, userID, optionID string) (dbsqlc.Vote, error) {
+	roomUID, err := utils.StrToPgUUID(roomID)
+	if err != nil {
+		return dbsqlc.Vote{}, err
+	}
+	userUID, err := utils.StrToPgUUID(userID)
+	if err != nil {
+		return dbsqlc.Vote{}, err
+	}
+	optUID, err := utils.StrToPgUUID(optionID)
+	if err != nil {
+		return dbsqlc.Vote{}, err
+	}
+	return r.queries.GetVoteByRoomUserOption(ctx, dbsqlc.GetVoteByRoomUserOptionParams{
+		RoomID:   roomUID,
+		UserID:   userUID,
+		OptionID: optUID,
+	})
+}
+
+func (r *Repository) GetVoteCountByRoomAndUser(ctx context.Context, roomID, userID string) (int64, error) {
+	roomUID, err := utils.StrToPgUUID(roomID)
+	if err != nil {
+		return 0, err
+	}
+	userUID, err := utils.StrToPgUUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	return r.queries.GetVoteCountByRoomAndUser(ctx, dbsqlc.GetVoteCountByRoomAndUserParams{
+		RoomID: roomUID,
+		UserID: userUID,
+	})
+}
+
+func (r *Repository) GetVotesByRoomAndUser(ctx context.Context, roomID, userID string) ([]dbsqlc.Vote, error) {
+	roomUID, err := utils.StrToPgUUID(roomID)
 	if err != nil {
 		return nil, err
 	}
-	return r.queries.GetVoteCountsByRoom(ctx, uid)
+	userUID, err := utils.StrToPgUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	return r.queries.GetVotesByRoomAndUser(ctx, dbsqlc.GetVotesByRoomAndUserParams{
+		RoomID: roomUID,
+		UserID: userUID,
+	})
 }
