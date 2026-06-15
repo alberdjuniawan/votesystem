@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 
@@ -15,16 +16,26 @@ const ReqIDKey contextKey = "request_id"
 var log *slog.Logger
 
 func Init(env string) {
-	var handler slog.Handler
-
 	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
 
 	if env == "production" {
 		opts.Level = slog.LevelInfo
-		handler = slog.NewJSONHandler(os.Stdout, opts)
-	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
 	}
+
+	os.MkdirAll("logs", 0755)
+	logFile, err := os.OpenFile("logs/app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		logFile = nil
+	}
+
+	var writer io.Writer
+	if logFile != nil {
+		writer = io.MultiWriter(os.Stdout, logFile)
+	} else {
+		writer = os.Stdout
+	}
+
+	handler := slog.NewJSONHandler(writer, opts)
 
 	log = slog.New(handler)
 	slog.SetDefault(log)
