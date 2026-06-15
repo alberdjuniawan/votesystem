@@ -9,30 +9,50 @@ import (
 	"github.com/alberdjuniawan/votesystem/internal/modules/leaderboard"
 	"github.com/alberdjuniawan/votesystem/internal/modules/realtime"
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
+	"github.com/alberdjuniawan/votesystem/internal/shared/metrics"
 	"github.com/alberdjuniawan/votesystem/internal/shared/utils"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/trace"
 )
 
 type Service struct {
 	repo        *Repository
 	leaderboard *leaderboard.Service
 	hub         *realtime.Hub
+	db          *pgxpool.Pool
+	tracer      sdktrace.Tracer
 }
 
 func NewService(
 	repo *Repository,
 	leaderboard *leaderboard.Service,
 	hub *realtime.Hub,
+	db *pgxpool.Pool,
 ) *Service {
 	return &Service{
 		repo:        repo,
 		leaderboard: leaderboard,
 		hub:         hub,
+		db:          db,
+		tracer: otel.Tracer("github.com/alberdjuniawan/votesystem/internal/modules/vote",
+			sdktrace.WithInstrumentationVersion("1.0.0"),
+		),
 	}
 }
 
 func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastVoteRequest) (*VoteResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "vote.CastVote",
+		sdktrace.WithAttributes(
+			attribute.String("room_id", roomID),
+			attribute.String("option_id", req.OptionID),
+		),
+	)
+	defer span.End()
+
 	room, err := s.repo.GetRoomByID(ctx, roomID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -41,6 +61,8 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 		logger.Error(ctx, "Unexpected DB error getting room", "error", err)
 		return nil, ErrInternal
 	}
+
+	span.SetAttributes(attribute.String("room_type", string(room.Type)))
 
 	if room.Status != dbsqlc.RoomStatusActive {
 		return nil, ErrVotingClosed
@@ -66,8 +88,33 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 		return nil, ErrOptionNotInRoom
 	}
 
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		logger.Error(ctx, "Failed to begin transaction", "error", err)
+		return nil, ErrInternal
+	}
+	defer tx.Rollback(ctx)
+
+	tq := dbsqlc.New(tx)
+
+	roomUID, err := utils.StrToPgUUID(roomID)
+	if err != nil {
+		return nil, ErrInternal
+	}
+	userUID, err := utils.StrToPgUUID(userID)
+	if err != nil {
+		return nil, ErrInternal
+	}
+	optUID, err := utils.StrToPgUUID(req.OptionID)
+	if err != nil {
+		return nil, ErrInternal
+	}
+
 	if room.Type == dbsqlc.RoomTypeSingleChoice {
-		votes, err := s.repo.GetVotesByRoomAndUser(ctx, roomID, userID)
+		votes, err := tq.GetVotesByRoomAndUser(ctx, dbsqlc.GetVotesByRoomAndUserParams{
+			RoomID: roomUID,
+			UserID: userUID,
+		})
 		if err != nil {
 			logger.Error(ctx, "Unexpected DB error checking vote", "error", err)
 			return nil, ErrInternal
@@ -76,7 +123,11 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 			return nil, ErrAlreadyVoted
 		}
 	} else {
-		_, err = s.repo.GetVoteByRoomUserOption(ctx, roomID, userID, req.OptionID)
+		_, err = tq.GetVoteByRoomUserOption(ctx, dbsqlc.GetVoteByRoomUserOptionParams{
+			RoomID:   roomUID,
+			UserID:   userUID,
+			OptionID: optUID,
+		})
 		if err == nil {
 			return nil, ErrAlreadyVotedOption
 		}
@@ -85,7 +136,10 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 			return nil, ErrInternal
 		}
 
-		voteCount, err := s.repo.GetVoteCountByRoomAndUser(ctx, roomID, userID)
+		voteCount, err := tq.GetVoteCountByRoomAndUser(ctx, dbsqlc.GetVoteCountByRoomAndUserParams{
+			RoomID: roomUID,
+			UserID: userUID,
+		})
 		if err != nil {
 			logger.Error(ctx, "Unexpected DB error counting votes", "error", err)
 			return nil, ErrInternal
@@ -95,7 +149,11 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 		}
 	}
 
-	vote, err := s.repo.CreateVote(ctx, roomID, userID, req.OptionID)
+	vote, err := tq.CreateVote(ctx, dbsqlc.CreateVoteParams{
+		RoomID:   roomUID,
+		UserID:   userUID,
+		OptionID: optUID,
+	})
 	if err != nil {
 		if isUniqueViolation(err) {
 			if room.Type == dbsqlc.RoomTypeSingleChoice {
@@ -106,6 +164,13 @@ func (s *Service) CastVote(ctx context.Context, roomID, userID string, req CastV
 		logger.Error(ctx, "Failed to insert vote", "error", err)
 		return nil, ErrInternal
 	}
+
+	if err := tx.Commit(ctx); err != nil {
+		logger.Error(ctx, "Failed to commit vote transaction", "error", err)
+		return nil, ErrInternal
+	}
+
+	metrics.RecordVoteCast(ctx, roomID, req.OptionID)
 
 	if err := s.leaderboard.IncrementVote(ctx, roomID, req.OptionID); err != nil {
 		logger.Error(ctx, "Failed to update leaderboard", "error", err)
