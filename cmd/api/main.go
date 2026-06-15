@@ -9,12 +9,15 @@ import (
 	"time"
 
 	"github.com/alberdjuniawan/votesystem/internal/config"
+	"github.com/alberdjuniawan/votesystem/internal/db"
+	dbshared "github.com/alberdjuniawan/votesystem/internal/shared/db"
 	"github.com/alberdjuniawan/votesystem/internal/modules/realtime"
-	"github.com/alberdjuniawan/votesystem/internal/shared/db"
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
+	"github.com/alberdjuniawan/votesystem/internal/shared/metrics"
 	miniopkg "github.com/alberdjuniawan/votesystem/internal/shared/minio"
 	redispkg "github.com/alberdjuniawan/votesystem/internal/shared/redis"
 	"github.com/alberdjuniawan/votesystem/internal/shared/telemetry"
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 )
 
 func main() {
@@ -24,17 +27,32 @@ func main() {
 
 	ctx := context.Background()
 
-	tel, err := telemetry.Init(ctx, cfg.OTel.Endpoint, cfg.OTel.ServiceName)
+	tel, err := telemetry.Init(ctx, cfg.OTel.Endpoint, cfg.OTel.ServiceName, cfg.OTel.SamplerRate)
 	if err != nil {
 		log.Printf("Warning: failed to init telemetry: %v", err)
 	}
 
-	dbPool, err := db.NewPool(ctx, cfg.Database)
+	dbPool, err := dbshared.NewPool(ctx, cfg.Database)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer dbPool.Close()
 	logger.Info(ctx, "Database connected")
+
+	if err := metrics.Init(func() (int64, int64, int64) {
+		s := dbPool.Stat()
+		return int64(s.AcquiredConns()), int64(s.IdleConns()), int64(s.MaxConns())
+	}); err != nil {
+		log.Fatalf("Failed to init metrics: %v", err)
+	}
+	if err := runtime.Start(runtime.WithMinimumReadMemStatsInterval(time.Second)); err != nil {
+		log.Printf("Warning: failed to init runtime metrics: %v", err)
+	}
+
+	if err := db.RunMigrations(ctx, dbPool); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
+	logger.Info(ctx, "Database migrations applied")
 
 	redisClient, err := redispkg.NewClient(cfg.Redis)
 	if err != nil {
@@ -45,9 +63,11 @@ func main() {
 
 	minioClient, err := miniopkg.NewClient(cfg.MinIO)
 	if err != nil {
-		log.Fatalf("Failed to connect to minio: %v", err)
+		logger.Error(ctx, "Failed to connect to minio, continuing without it", "error", err)
+		minioClient = nil
+	} else {
+		logger.Info(ctx, "MinIO connected")
 	}
-	logger.Info(ctx, "MinIO connected")
 
 	hub := realtime.NewHub()
 	hubCtx, hubCancel := context.WithCancel(ctx)
