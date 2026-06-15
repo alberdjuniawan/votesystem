@@ -7,6 +7,9 @@ import (
 
 	"github.com/alberdjuniawan/votesystem/internal/shared/utils"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/trace"
 )
 
 func roomKey(roomID string) string {
@@ -14,12 +17,19 @@ func roomKey(roomID string) string {
 }
 
 type Service struct {
-	redis *redis.Client
-	repo  *Repository
+	redis  *redis.Client
+	repo   *Repository
+	tracer sdktrace.Tracer
 }
 
 func NewService(redis *redis.Client, repo *Repository) *Service {
-	return &Service{redis: redis, repo: repo}
+	return &Service{
+		redis: redis,
+		repo:  repo,
+		tracer: otel.Tracer("github.com/alberdjuniawan/votesystem/internal/modules/leaderboard",
+			sdktrace.WithInstrumentationVersion("1.0.0"),
+		),
+	}
 }
 
 type OptionScore struct {
@@ -35,6 +45,14 @@ type LeaderboardResponse struct {
 }
 
 func (s *Service) IncrementVote(ctx context.Context, roomID, optionID string) error {
+	ctx, span := s.tracer.Start(ctx, "leaderboard.IncrementVote",
+		sdktrace.WithAttributes(
+			attribute.String("room_id", roomID),
+			attribute.String("option_id", optionID),
+		),
+	)
+	defer span.End()
+
 	return s.redis.ZIncrBy(ctx, roomKey(roomID), 1, optionID).Err()
 }
 
@@ -63,6 +81,11 @@ func (s *Service) TotalVotes(ctx context.Context, roomID string) (int64, error) 
 }
 
 func (s *Service) SeedLeaderboard(ctx context.Context, roomID string, scores []OptionScore) error {
+	ctx, span := s.tracer.Start(ctx, "leaderboard.SeedLeaderboard",
+		sdktrace.WithAttributes(attribute.String("room_id", roomID)),
+	)
+	defer span.End()
+
 	if len(scores) == 0 {
 		return nil
 	}
@@ -77,10 +100,20 @@ func (s *Service) SeedLeaderboard(ctx context.Context, roomID string, scores []O
 }
 
 func (s *Service) DeleteLeaderboard(ctx context.Context, roomID string) error {
+	ctx, span := s.tracer.Start(ctx, "leaderboard.DeleteLeaderboard",
+		sdktrace.WithAttributes(attribute.String("room_id", roomID)),
+	)
+	defer span.End()
+
 	return s.redis.Del(ctx, roomKey(roomID)).Err()
 }
 
 func (s *Service) GetLeaderboard(ctx context.Context, roomID string) (*LeaderboardResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "leaderboard.GetLeaderboard",
+		sdktrace.WithAttributes(attribute.String("room_id", roomID)),
+	)
+	defer span.End()
+
 	dbOptions, err := s.repo.ListOptionsByRoom(ctx, roomID)
 	if err != nil {
 		return nil, err
