@@ -3,14 +3,18 @@ package room
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
+	"math/big"
 
 	dbsqlc "github.com/alberdjuniawan/votesystem/internal/db/sqlc"
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
+	"github.com/alberdjuniawan/votesystem/internal/shared/metrics"
 	"github.com/alberdjuniawan/votesystem/internal/shared/utils"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/trace"
 )
 
 var validTransitions = map[dbsqlc.RoomStatus]dbsqlc.RoomStatus{
@@ -21,13 +25,25 @@ var validTransitions = map[dbsqlc.RoomStatus]dbsqlc.RoomStatus{
 type Service struct {
 	repo    *Repository
 	baseURL string
+	tracer  sdktrace.Tracer
 }
 
 func NewService(repo *Repository, baseURL string) *Service {
-	return &Service{repo: repo, baseURL: baseURL}
+	return &Service{
+		repo:    repo,
+		baseURL: baseURL,
+		tracer: otel.Tracer("github.com/alberdjuniawan/votesystem/internal/modules/room",
+			sdktrace.WithInstrumentationVersion("1.0.0"),
+		),
+	}
 }
 
 func (s *Service) CreateRoom(ctx context.Context, ownerID string, req CreateRoomRequest) (*RoomResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "room.CreateRoom",
+		sdktrace.WithAttributes(attribute.String("owner_id", ownerID)),
+	)
+	defer span.End()
+
 	ownerUID, err := utils.StrToPgUUID(ownerID)
 	if err != nil {
 		return nil, ErrInternal
@@ -68,10 +84,17 @@ func (s *Service) CreateRoom(ctx context.Context, ownerID string, req CreateRoom
 		return nil, ErrInternal
 	}
 
+	metrics.RecordRoomCreated(ctx, ownerID)
+
 	return toRoomResponse(room, s.baseURL), nil
 }
 
 func (s *Service) GetRoomByID(ctx context.Context, id string) (*RoomResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "room.GetRoomByID",
+		sdktrace.WithAttributes(attribute.String("room_id", id)),
+	)
+	defer span.End()
+
 	room, err := s.repo.GetRoomByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -84,6 +107,11 @@ func (s *Service) GetRoomByID(ctx context.Context, id string) (*RoomResponse, er
 }
 
 func (s *Service) GetRoomByShareCode(ctx context.Context, code string) (*RoomResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "room.GetRoomByShareCode",
+		sdktrace.WithAttributes(attribute.String("share_code", code)),
+	)
+	defer span.End()
+
 	room, err := s.repo.GetRoomByShareCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -96,6 +124,11 @@ func (s *Service) GetRoomByShareCode(ctx context.Context, code string) (*RoomRes
 }
 
 func (s *Service) ListMyRooms(ctx context.Context, ownerID string) ([]RoomResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "room.ListMyRooms",
+		sdktrace.WithAttributes(attribute.String("owner_id", ownerID)),
+	)
+	defer span.End()
+
 	rooms, err := s.repo.ListRoomsByOwner(ctx, ownerID)
 	if err != nil {
 		logger.Error(ctx, "Failed to list rooms", "owner_id", ownerID, "error", err)
@@ -110,6 +143,14 @@ func (s *Service) ListMyRooms(ctx context.Context, ownerID string) ([]RoomRespon
 }
 
 func (s *Service) UpdateRoomStatus(ctx context.Context, id, ownerID, newStatus string) (*RoomResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "room.UpdateRoomStatus",
+		sdktrace.WithAttributes(
+			attribute.String("room_id", id),
+			attribute.String("new_status", newStatus),
+		),
+	)
+	defer span.End()
+
 	room, err := s.repo.GetRoomByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -138,6 +179,14 @@ func (s *Service) UpdateRoomStatus(ctx context.Context, id, ownerID, newStatus s
 }
 
 func (s *Service) DeleteRoom(ctx context.Context, id, ownerID string) error {
+	ctx, span := s.tracer.Start(ctx, "room.DeleteRoom",
+		sdktrace.WithAttributes(
+			attribute.String("room_id", id),
+			attribute.String("owner_id", ownerID),
+		),
+	)
+	defer span.End()
+
 	room, err := s.repo.GetRoomByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -160,8 +209,8 @@ func (s *Service) DeleteRoom(ctx context.Context, id, ownerID string) error {
 }
 
 func (s *Service) generateUniqueShareCode(ctx context.Context) (string, error) {
-	for i := 0; i < 3; i++ {
-		code, err := randomHex(6)
+	for i := 0; i < 5; i++ {
+		code, err := randomBase62(8)
 		if err != nil {
 			return "", err
 		}
@@ -177,12 +226,18 @@ func (s *Service) generateUniqueShareCode(ctx context.Context) (string, error) {
 	return "", ErrShareCodeCollision
 }
 
-func randomHex(n int) (string, error) {
-	bytes := make([]byte, n)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+const charsetBase62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+func randomBase62(n int) (string, error) {
+	result := make([]byte, n)
+	for i := range result {
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(charsetBase62))))
+		if err != nil {
+			return "", err
+		}
+		result[i] = charsetBase62[idx.Int64()]
 	}
-	return hex.EncodeToString(bytes), nil
+	return string(result), nil
 }
 
 func toRoomResponse(r dbsqlc.Room, baseURL string) *RoomResponse {
