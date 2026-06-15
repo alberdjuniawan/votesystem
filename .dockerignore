@@ -1,0 +1,37 @@
+# env
+.env
+
+# Logs
+logs/
+
+# Infra config (not needed for build)
+config/
+
+# Git
+.git/
+.gitignore
+
+# Go
+vendor/
+bin/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docs
+*.md
