@@ -12,6 +12,14 @@ type FieldError struct {
 }
 
 func ValidateStruct(data interface{}) []*FieldError {
+	if data == nil {
+		return []*FieldError{{
+			Field:   "body",
+			Tag:     "required",
+			Message: "Request body is required",
+		}}
+	}
+
 	var errs []*FieldError
 
 	err := validate.Struct(data)
