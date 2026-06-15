@@ -10,18 +10,36 @@ import (
 	"github.com/alberdjuniawan/votesystem/internal/shared/utils"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/trace"
 )
 
 type Service struct {
 	repo    *Repository
 	baseURL string
+	tracer  sdktrace.Tracer
 }
 
 func NewService(repo *Repository, baseURL string) *Service {
-	return &Service{repo: repo, baseURL: baseURL}
+	return &Service{
+		repo:    repo,
+		baseURL: baseURL,
+		tracer: otel.Tracer("github.com/alberdjuniawan/votesystem/internal/modules/option",
+			sdktrace.WithInstrumentationVersion("1.0.0"),
+		),
+	}
 }
 
 func (s *Service) CreateOption(ctx context.Context, roomID, userID string, req CreateOptionRequest) (*OptionResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "option.CreateOption",
+		sdktrace.WithAttributes(
+			attribute.String("room_id", roomID),
+			attribute.String("label", req.Label),
+		),
+	)
+	defer span.End()
+
 	if err := s.validateRoomOwnerDraft(ctx, roomID, userID); err != nil {
 		return nil, err
 	}
@@ -60,6 +78,11 @@ func (s *Service) CreateOption(ctx context.Context, roomID, userID string, req C
 }
 
 func (s *Service) ListOptions(ctx context.Context, roomID string) ([]OptionResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "option.ListOptions",
+		sdktrace.WithAttributes(attribute.String("room_id", roomID)),
+	)
+	defer span.End()
+
 	_, err := s.repo.GetRoomByID(ctx, roomID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -83,6 +106,11 @@ func (s *Service) ListOptions(ctx context.Context, roomID string) ([]OptionRespo
 }
 
 func (s *Service) UpdateOption(ctx context.Context, optionID, userID string, req UpdateOptionRequest) (*OptionResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "option.UpdateOption",
+		sdktrace.WithAttributes(attribute.String("option_id", optionID)),
+	)
+	defer span.End()
+
 	opt, err := s.repo.GetOptionByID(ctx, optionID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -148,6 +176,11 @@ func (s *Service) UpdateOption(ctx context.Context, optionID, userID string, req
 }
 
 func (s *Service) DeleteOption(ctx context.Context, optionID, userID string) error {
+	ctx, span := s.tracer.Start(ctx, "option.DeleteOption",
+		sdktrace.WithAttributes(attribute.String("option_id", optionID)),
+	)
+	defer span.End()
+
 	opt, err := s.repo.GetOptionByID(ctx, optionID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
