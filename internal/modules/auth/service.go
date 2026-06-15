@@ -11,18 +11,33 @@ import (
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
 	"github.com/alberdjuniawan/votesystem/internal/shared/utils"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/trace"
 )
 
 type Service struct {
-	repo *Repository
-	cfg  config.JWTConfig
+	repo   *Repository
+	cfg    config.JWTConfig
+	tracer sdktrace.Tracer
 }
 
 func NewService(repo *Repository, cfg config.JWTConfig) *Service {
-	return &Service{repo: repo, cfg: cfg}
+	return &Service{
+		repo: repo,
+		cfg:  cfg,
+		tracer: otel.Tracer("github.com/alberdjuniawan/votesystem/internal/modules/auth",
+			sdktrace.WithInstrumentationVersion("1.0.0"),
+		),
+	}
 }
 
 func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "auth.Register",
+		sdktrace.WithAttributes(attribute.String("email", req.Email)),
+	)
+	defer span.End()
+
 	_, err := s.repo.GetUserByEmail(ctx, req.Email)
 	if err == nil {
 		return nil, ErrEmailAlreadyExists
@@ -48,6 +63,11 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthRespo
 }
 
 func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "auth.Login",
+		sdktrace.WithAttributes(attribute.String("email", req.Email)),
+	)
+	defer span.End()
+
 	user, err := s.repo.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
