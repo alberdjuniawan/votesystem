@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
+	"github.com/alberdjuniawan/votesystem/internal/shared/metrics"
 )
 
 type BroadcastMessage struct {
@@ -56,6 +57,7 @@ func (h *Hub) Run(ctx context.Context) {
 			return
 
 		case c := <-h.register:
+			metrics.RecordWSConnect()
 			h.mu.Lock()
 			if _, ok := h.rooms[c.roomID]; !ok {
 				h.rooms[c.roomID] = make(map[*client]bool)
@@ -64,6 +66,7 @@ func (h *Hub) Run(ctx context.Context) {
 			h.mu.Unlock()
 
 		case c := <-h.unregister:
+			metrics.RecordWSDisconnect()
 			h.mu.Lock()
 			if clients, ok := h.rooms[c.roomID]; ok {
 				delete(clients, c)
