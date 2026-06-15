@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"os"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
@@ -53,11 +54,12 @@ func (r RedisConfig) Addr() string {
 }
 
 type MinIOConfig struct {
-	Endpoint  string `env:"MINIO_ENDPOINT" envDefault:"localhost:9000"`
-	AccessKey string `env:"MINIO_ACCESS_KEY"`
-	SecretKey string `env:"MINIO_SECRET_KEY"`
-	Bucket    string `env:"MINIO_BUCKET" envDefault:"votesystem"`
-	UseSSL    bool   `env:"MINIO_USE_SSL" envDefault:"false"`
+	Endpoint     string `env:"MINIO_ENDPOINT" envDefault:"localhost:9000"`
+	AccessKey    string `env:"MINIO_ACCESS_KEY"`
+	SecretKey    string `env:"MINIO_SECRET_KEY"`
+	Bucket       string `env:"MINIO_BUCKET" envDefault:"votesystem"`
+	UseSSL       bool   `env:"MINIO_USE_SSL" envDefault:"false"`
+	PublicBaseURL string `env:"MINIO_PUBLIC_BASE_URL" envDefault:""`
 }
 
 type JWTConfig struct {
@@ -67,13 +69,16 @@ type JWTConfig struct {
 }
 
 type OTelConfig struct {
-	Endpoint    string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:"localhost:4317"`
-	ServiceName string `env:"OTEL_SERVICE_NAME" envDefault:"votesystem"`
+	Endpoint    string  `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:"localhost:4317"`
+	ServiceName string  `env:"OTEL_SERVICE_NAME" envDefault:"votesystem"`
+	SamplerRate float64 `env:"OTEL_SAMPLER_RATE" envDefault:"1.0"`
 }
 
 func Load() *Config {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, reading from environment")
+	if _, err := os.Stat(".env"); err == nil {
+		if err := godotenv.Load(); err != nil {
+			log.Printf("Warning: failed to load .env file: %v", err)
+		}
 	}
 
 	cfg := &Config{}
