@@ -26,12 +26,11 @@ var (
 )
 
 func NewError(c *gin.Context, appErr AppError, details any) {
-	reqID := c.GetHeader("X-Request-ID")
-	if reqID == "" {
-		reqID = "req_" + uuid.New().String()
+	reqID, _ := c.Get("request_id")
+	reqIDStr, _ := reqID.(string)
+	if reqIDStr == "" {
+		reqIDStr = "req_" + uuid.New().String()
 	}
-
-	c.Set("request_id", reqID)
 
 	c.JSON(appErr.HTTPStatus, WebResponse{
 		Success: false,
@@ -40,6 +39,6 @@ func NewError(c *gin.Context, appErr AppError, details any) {
 			Message: appErr.Message,
 			Details: details,
 		},
-		RequestID: reqID,
+		RequestID: reqIDStr,
 	})
 }
