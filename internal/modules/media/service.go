@@ -14,6 +14,9 @@ import (
 	"github.com/alberdjuniawan/votesystem/internal/shared/utils"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -29,12 +32,16 @@ var allowedMimeTypes = map[string]string{
 type Service struct {
 	repo        *Repository
 	minioClient *miniopkg.Client
+	tracer      sdktrace.Tracer
 }
 
 func NewService(repo *Repository, minioClient *miniopkg.Client) *Service {
 	return &Service{
 		repo:        repo,
 		minioClient: minioClient,
+		tracer: otel.Tracer("github.com/alberdjuniawan/votesystem/internal/modules/media",
+			sdktrace.WithInstrumentationVersion("1.0.0"),
+		),
 	}
 }
 
@@ -47,6 +54,15 @@ type UploadInput struct {
 }
 
 func (s *Service) Upload(ctx context.Context, input UploadInput) (*MediaResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "media.Upload",
+		sdktrace.WithAttributes(
+			attribute.String("original_name", input.OriginalName),
+			attribute.String("mime_type", input.MimeType),
+			attribute.Int64("size_bytes", input.Size),
+		),
+	)
+	defer span.End()
+
 	if input.Size > maxFileSize {
 		return nil, ErrFileTooLarge
 	}
@@ -95,6 +111,14 @@ func (s *Service) Upload(ctx context.Context, input UploadInput) (*MediaResponse
 }
 
 func (s *Service) Delete(ctx context.Context, mediaID, userID string) error {
+	ctx, span := s.tracer.Start(ctx, "media.Delete",
+		sdktrace.WithAttributes(
+			attribute.String("media_id", mediaID),
+			attribute.String("user_id", userID),
+		),
+	)
+	defer span.End()
+
 	media, err := s.repo.GetMediaByID(ctx, mediaID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -121,6 +145,11 @@ func (s *Service) Delete(ctx context.Context, mediaID, userID string) error {
 }
 
 func (s *Service) GetByID(ctx context.Context, mediaID string) (*MediaResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "media.GetByID",
+		sdktrace.WithAttributes(attribute.String("media_id", mediaID)),
+	)
+	defer span.End()
+
 	media, err := s.repo.GetMediaByID(ctx, mediaID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
