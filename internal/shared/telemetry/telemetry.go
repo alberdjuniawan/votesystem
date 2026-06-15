@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -22,7 +23,17 @@ type Telemetry struct {
 	Shutdown       func(context.Context) error
 }
 
-func Init(ctx context.Context, endpoint, serviceName string) (*Telemetry, error) {
+func sampler(ratio float64) sdktrace.Sampler {
+	if ratio >= 1.0 {
+		return sdktrace.AlwaysSample()
+	}
+	if ratio <= 0 {
+		return sdktrace.NeverSample()
+	}
+	return sdktrace.TraceIDRatioBased(ratio)
+}
+
+func Init(ctx context.Context, endpoint, serviceName string, samplerRate float64) (*Telemetry, error) {
 	conn, err := grpc.NewClient(endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -47,8 +58,7 @@ func Init(ctx context.Context, endpoint, serviceName string) (*Telemetry, error)
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(res),
-		// sdktrace.TraceIDRatioBased(0.1)
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSampler(sampler(samplerRate)),
 	)
 
 	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
@@ -56,8 +66,14 @@ func Init(ctx context.Context, endpoint, serviceName string) (*Telemetry, error)
 		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
 	}
 
+	promExporter, err := prometheus.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prometheus exporter: %w", err)
+	}
+
 	meterProvider := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
+		sdkmetric.WithReader(promExporter),
 		sdkmetric.WithResource(res),
 	)
 
