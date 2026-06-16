@@ -139,7 +139,9 @@ services:
       - loadtest
     volumes:
       - ./config/k6:/scripts
-    command: run -e VOTE_API_BASE_URL=http://votesystem:8080 /scripts/loadtest.js
+    env_file:
+      - .env.k6
+    command: run /scripts/loadtest.js
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -152,12 +154,15 @@ services:
     container_name: votesystem_grafana
     restart: unless-stopped
     ports:
-    - "3000:3000"
+      - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_GRAFANA_PASSWORD:-admin}
       GF_AUTH_ANONYMOUS_ENABLED: ${GF_AUTH_ANONYMOUS_ENABLED:-true}
       GF_AUTH_ANONYMOUS_ORG_ROLE: ${GF_AUTH_ANONYMOUS_ORG_ROLE:-Admin}
       GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_RENDERING_RENDERER_TOKEN: ${GF_RENDERER_TOKEN}
     volumes:
       - ./config/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - grafana_data:/var/lib/grafana
@@ -167,6 +172,16 @@ services:
       - prometheus
       - loki
       - tempo
+      - renderer
+
+  renderer:
+    image: grafana/grafana-image-renderer:latest
+    container_name: grafana_renderer
+    restart: unless-stopped
+    environment:
+      AUTH_TOKEN: ${GF_RENDERER_TOKEN}
+    networks:
+      - monitoring
   
   votesystem:
     build:
@@ -176,7 +191,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    env_file: .env
+    env_file: .env.docker
     networks:
       - monitoring
     depends_on:
