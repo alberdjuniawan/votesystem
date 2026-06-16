@@ -14,6 +14,16 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// GetLeaderboard godoc
+// @Summary      Get room leaderboard
+// @Description  Retrieves the real-time leaderboard and vote counts for a specific voting room.
+// @Tags         leaderboard
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Room ID (UUID)"
+// @Success      200  {object}  response.WebResponse{data=leaderboard.LeaderboardResponse} "Leaderboard retrieved successfully"
+// @Failure      500  {object}  response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /rooms/{id}/leaderboard [get]
 func (h *Handler) GetLeaderboard(c *gin.Context) {
 	roomID := c.Param("id")
 	ctx := c.Request.Context()

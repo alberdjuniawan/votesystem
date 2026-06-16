@@ -18,6 +18,21 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// CreateOption godoc
+// @Summary      Create a new voting option
+// @Description  Adds a new option to a specific room. The room must be in "draft" status and the caller must be the room owner.
+// @Tags         option
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Room ID (UUID)"
+// @Param        request body option.CreateOptionRequest true "Option details"
+// @Success      201 {object} response.WebResponse{data=option.OptionResponse} "Option successfully created"
+// @Failure      400 {object} response.WebResponse{error=response.ErrorDetail} "Invalid input or room is not in draft status"
+// @Failure      403 {object} response.WebResponse{error=response.ErrorDetail} "Forbidden, you are not the room owner"
+// @Failure      404 {object} response.WebResponse{error=response.ErrorDetail} "Room not found"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /rooms/{id}/options [post]
 func (h *Handler) CreateOption(c *gin.Context) {
 	roomID := c.Param("id")
 
@@ -55,6 +70,17 @@ func (h *Handler) CreateOption(c *gin.Context) {
 	response.Created(c, result)
 }
 
+// ListOptions godoc
+// @Summary      List room options
+// @Description  Retrieves all voting options associated with a specific room.
+// @Tags         option
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Room ID (UUID)"
+// @Success      200 {object} response.WebResponse{data=[]option.OptionResponse} "Options retrieved successfully"
+// @Failure      404 {object} response.WebResponse{error=response.ErrorDetail} "Room not found"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /rooms/{id}/options [get]
 func (h *Handler) ListOptions(c *gin.Context) {
 	roomID := c.Param("id")
 	ctx := c.Request.Context()
@@ -74,6 +100,22 @@ func (h *Handler) ListOptions(c *gin.Context) {
 	response.OK(c, result)
 }
 
+// UpdateOption godoc
+// @Summary      Update an option
+// @Description  Updates the details of a specific option. The room must be in "draft" status and the caller must be the room owner.
+// @Tags         option
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id         path      string  true  "Room ID (UUID)"
+// @Param        optionId   path      string  true  "Option ID (UUID)"
+// @Param        request body option.UpdateOptionRequest true "Option update details"
+// @Success      200 {object} response.WebResponse{data=option.OptionResponse} "Option successfully updated"
+// @Failure      400 {object} response.WebResponse{error=response.ErrorDetail} "Invalid input or room is not in draft status"
+// @Failure      403 {object} response.WebResponse{error=response.ErrorDetail} "Forbidden, you are not the room owner"
+// @Failure      404 {object} response.WebResponse{error=response.ErrorDetail} "Option not found"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /rooms/{id}/options/{optionId} [patch]
 func (h *Handler) UpdateOption(c *gin.Context) {
 	optionID := c.Param("optionId")
 
@@ -110,6 +152,21 @@ func (h *Handler) UpdateOption(c *gin.Context) {
 	response.OK(c, result)
 }
 
+// DeleteOption godoc
+// @Summary      Delete an option
+// @Description  Deletes a specific option. The room must be in "draft" status and the caller must be the room owner.
+// @Tags         option
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id         path      string  true  "Room ID (UUID)"
+// @Param        optionId   path      string  true  "Option ID (UUID)"
+// @Success      204 "No Content"
+// @Failure      400 {object} response.WebResponse{error=response.ErrorDetail} "Room is not in draft status"
+// @Failure      403 {object} response.WebResponse{error=response.ErrorDetail} "Forbidden, you are not the room owner"
+// @Failure      404 {object} response.WebResponse{error=response.ErrorDetail} "Option not found"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /rooms/{id}/options/{optionId} [delete]
 func (h *Handler) DeleteOption(c *gin.Context) {
 	optionID := c.Param("optionId")
 	ctx := c.Request.Context()

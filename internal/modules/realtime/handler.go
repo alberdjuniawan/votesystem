@@ -24,6 +24,14 @@ func NewHandler(hub *Hub) *Handler {
 	return &Handler{hub: hub}
 }
 
+// Connect godoc
+// @Summary      Connect to Room WebSocket
+// @Description  Upgrades the HTTP connection to a WebSocket connection. Used to receive real-time updates for a specific voting room (e.g., live vote counts).
+// @Tags         realtime
+// @Param        id   path      string  true  "Room ID (UUID)"
+// @Success      101  "Switching Protocols (WebSocket connection established)"
+// @Failure      400  {object}  response.WebResponse{error=response.ErrorDetail} "Room ID is required"
+// @Router       /ws/rooms/{id} [get]
 func (h *Handler) Connect(c *gin.Context) {
 	roomID := c.Param("id")
 	if roomID == "" {

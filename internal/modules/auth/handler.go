@@ -18,6 +18,18 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// Register godoc
+// @Summary      Register a new user
+// @Description  Creates a new user account and returns authentication tokens.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request body auth.RegisterRequest true "Registration details"
+// @Success      201 {object} response.WebResponse{data=auth.AuthResponse} "Successfully registered"
+// @Failure      400 {object} response.WebResponse{error=response.ErrorDetail} "Invalid input data or validation error"
+// @Failure      409 {object} response.WebResponse{error=response.ErrorDetail} "Email already exists"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -48,6 +60,18 @@ func (h *Handler) Register(c *gin.Context) {
 	response.Created(c, result)
 }
 
+// Login godoc
+// @Summary      Login user
+// @Description  Authenticates a user with email and password, returning JWT access and refresh tokens.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request body auth.LoginRequest true "Login credentials"
+// @Success      200 {object} response.WebResponse{data=auth.AuthResponse} "Successfully logged in"
+// @Failure      400 {object} response.WebResponse{error=response.ErrorDetail} "Invalid input data"
+// @Failure      401 {object} response.WebResponse{error=response.ErrorDetail} "Invalid email or password"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -78,6 +102,17 @@ func (h *Handler) Login(c *gin.Context) {
 	response.OK(c, result)
 }
 
+// GetMe godoc
+// @Summary      Get current user profile
+// @Description  Retrieves the profile information of the currently authenticated user based on the provided JWT token.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} response.WebResponse{data=auth.UserResponse} "User profile retrieved successfully"
+// @Failure      401 {object} response.WebResponse{error=response.ErrorDetail} "Access denied, invalid or expired token"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /auth/me [get]
 func (h *Handler) GetMe(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 

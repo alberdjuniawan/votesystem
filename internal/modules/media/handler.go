@@ -20,6 +20,19 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// Upload godoc
+// @Summary      Upload media file
+// @Description  Uploads an image file (jpeg, png, webp) up to 5MB to MinIO and returns the media details. Requires authentication.
+// @Tags         media
+// @Accept       multipart/form-data
+// @Produce      json
+// @Security     BearerAuth
+// @Param        file formData file true "Image file to upload"
+// @Success      201 {object} response.WebResponse{data=media.MediaResponse} "File successfully uploaded"
+// @Failure      400 {object} response.WebResponse{error=response.ErrorDetail} "Invalid file, missing field, or file too large"
+// @Failure      401 {object} response.WebResponse{error=response.ErrorDetail} "Access denied, invalid or expired token"
+// @Failure      500 {object} response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /media [post]
 func (h *Handler) Upload(c *gin.Context) {
 	if err := c.Request.ParseMultipartForm(maxMultipartMemory); err != nil {
 		response.NewError(c, response.ErrBadRequest, "failed to parse multipart form")
@@ -72,6 +85,20 @@ func (h *Handler) Upload(c *gin.Context) {
 	response.Created(c, result)
 }
 
+// Delete godoc
+// @Summary      Delete media file
+// @Description  Deletes a specific media file by its ID. Only the original uploader is authorized to delete it.
+// @Tags         media
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Media ID (UUID)"
+// @Success      204  "No Content"
+// @Failure      401  {object}  response.WebResponse{error=response.ErrorDetail} "Access denied, invalid or expired token"
+// @Failure      403  {object}  response.WebResponse{error=response.ErrorDetail} "Forbidden, you are not the uploader"
+// @Failure      404  {object}  response.WebResponse{error=response.ErrorDetail} "Media not found"
+// @Failure      500  {object}  response.WebResponse{error=response.ErrorDetail} "Internal server error"
+// @Router       /media/{id} [delete]
 func (h *Handler) Delete(c *gin.Context) {
 	mediaID := c.Param("id")
 	ctx := c.Request.Context()
