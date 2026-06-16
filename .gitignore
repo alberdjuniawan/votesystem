@@ -1,5 +1,7 @@
 # env file
 .env
+.env.docker
+.env.k6
 
 # binary
 *.exe
