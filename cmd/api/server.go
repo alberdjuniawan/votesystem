@@ -13,6 +13,11 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/alberdjuniawan/votesystem/docs"
+
 	"github.com/alberdjuniawan/votesystem/internal/config"
 	dbsqlc "github.com/alberdjuniawan/votesystem/internal/db/sqlc"
 	"github.com/alberdjuniawan/votesystem/internal/middleware"
@@ -63,6 +68,10 @@ func NewServer(
 			"service": cfg.OTel.ServiceName,
 		})
 	})
+
+	if cfg.App.Env != "production" {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
 
 	queries := dbsqlc.New(dbPool)
 	authMw := middleware.Auth(cfg.JWT.Secret)
