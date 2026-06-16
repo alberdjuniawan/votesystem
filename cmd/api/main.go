@@ -10,8 +10,8 @@ import (
 
 	"github.com/alberdjuniawan/votesystem/internal/config"
 	"github.com/alberdjuniawan/votesystem/internal/db"
-	dbshared "github.com/alberdjuniawan/votesystem/internal/shared/db"
 	"github.com/alberdjuniawan/votesystem/internal/modules/realtime"
+	dbshared "github.com/alberdjuniawan/votesystem/internal/shared/db"
 	"github.com/alberdjuniawan/votesystem/internal/shared/logger"
 	"github.com/alberdjuniawan/votesystem/internal/shared/metrics"
 	miniopkg "github.com/alberdjuniawan/votesystem/internal/shared/minio"
@@ -20,6 +20,25 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 )
 
+// @title           VoteSystem API
+// @version         1.0
+// @description     API documentation for the VoteSystem platform.
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   Alberd Juniawan Pasunda
+// @contact.url    https://github.com/alberdjuniawan
+// @contact.email  alberd@example.com
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:8080
+// @BasePath  /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 func main() {
 	cfg := config.Load()
 
